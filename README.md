@@ -1,6 +1,30 @@
 # Conveyor Vision — Item Counter
 
-Computer vision system that detects and counts items passing through a conveyor belt (machine band) from uploaded video.
+Computer vision system that detects and counts items passing through a conveyor belt (machine band) from uploaded video. Built with **TypeScript** (Express + Socket.IO) and **Python** (OpenCV).
+
+## Project Structure
+
+```
+src/
+├── index.ts              ← Entry point (app setup + server start)
+├── config.ts             ← Constants (PORT, paths)
+├── types.ts              ← Shared interfaces & types
+├── store.ts              ← In-memory job store class
+├── socket.ts             ← Socket.IO event handlers
+├── middleware/
+│   └── upload.ts         ← Multer config
+└── routes/
+    ├── health.ts         ← GET  /api/health
+    ├── upload.ts         ← POST /api/upload
+    ├── jobs.ts           ← GET  /api/jobs, GET /api/jobs/:id
+    └── count.ts          ← GET  /api/count
+
+processor/
+└── detect.py             ← OpenCV video processing pipeline
+
+public/
+└── index.html            ← Frontend dashboard
+```
 
 ## Architecture
 
@@ -13,7 +37,7 @@ Computer vision system that detects and counts items passing through a conveyor 
 └────────────────┬────────────────────────────────┘
                  │ HTTP + WebSocket
 ┌────────────────▼────────────────────────────────┐
-│  Express Server (index.js)                      │
+│  Express Server (src/)                          │
 │  - POST /api/upload — receive video             │
 │  - GET  /api/jobs/:id — job status              │
 │  - GET  /api/jobs — list all jobs               │
@@ -54,7 +78,12 @@ pip install -r requirements.txt
 ## Run
 
 ```bash
+# Production — compile TypeScript then run
 npm start
+
+# Development — hot-reload with tsx
+npm run dev
+
 # → http://localhost:3000
 ```
 

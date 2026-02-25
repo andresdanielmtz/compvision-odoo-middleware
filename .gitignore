@@ -1,6 +1,7 @@
 node_modules/
 .venv/
 uploads/
+dist/
 *.mp4
 *.avi
 *.mov
