@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conveyor Vision — Item Counter</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --primary: #6c63ff;
+      --primary-hover: #5a52e0;
+      --text: #e4e4e7;
+      --muted: #9ca3af;
+      --success: #22c55e;
+      --error: #ef4444;
+      --warning: #f59e0b;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 1.25rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    header h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    header .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+    }
+
+    /* Stats row */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+
+    .stat-card .label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-card .value {
+      font-size: 2rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-card .value.counting { color: var(--primary); }
+    .stat-card .value.success { color: var(--success); }
+
+    /* Upload section */
+    .upload-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .upload-section h2 {
+      font-size: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 2.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--primary);
+      background: rgba(108, 99, 255, 0.05);
+    }
+
+    .drop-zone p { color: var(--muted); margin-top: 0.5rem; font-size: 0.9rem; }
+    .drop-zone .icon { font-size: 2rem; margin-bottom: 0.5rem; }
+
+    .options {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .options label {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .options input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 0.4rem 0.6rem;
+      width: 100px;
+      margin-left: 0.4rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.65rem 1.5rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 1rem;
+    }
+
+    .btn:hover { background: var(--primary-hover); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Progress bar */
+    .progress-container {
+      display: none;
+      margin-top: 1.25rem;
+    }
+
+    .progress-container.active { display: block; }
+
+    .progress-bar-bg {
+      height: 8px;
+      background: var(--bg);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.4rem;
+    }
+
+    /* Results */
+    .result-section {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .result-section.active { display: block; }
+
+    .result-section h2 { font-size: 1rem; margin-bottom: 1rem; }
+
+    .result-count {
+      font-size: 3rem;
+      font-weight: 800;
+      color: var(--success);
+      text-align: center;
+      margin: 1rem 0;
+    }
+
+    .result-count span { font-size: 1rem; color: var(--muted); font-weight: 400; }
+
+    video {
+      width: 100%;
+      border-radius: 8px;
+      margin-top: 1rem;
+      background: #000;
+    }
+
+    /* Job list */
+    .job-list {
+      margin-top: 1.5rem;
+    }
+
+    .job-list h3 {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .job-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      background: var(--bg);
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      font-size: 0.85rem;
+    }
+
+    .job-item .status-badge {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+
+    .status-badge.processing { background: rgba(108, 99, 255, 0.15); color: var(--primary); }
+    .status-badge.done { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+    .status-badge.error { background: rgba(239, 68, 68, 0.15); color: var(--error); }
+
+    #file-name { color: var(--text); font-weight: 500; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="dot"></div>
+    <h1>Conveyor Vision — Item Counter</h1>
+  </header>
+
+  <div class="container">
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat-card">
+        <div class="label">Total Items Counted</div>
+        <div class="value success" id="total-count">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Jobs Processed</div>
+        <div class="value" id="total-jobs">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Current Job Count</div>
+        <div class="value counting" id="current-count">—</div>
+      </div>
+    </div>
+
+    <!-- Upload -->
+    <div class="upload-section">
+      <h2>Upload Conveyor Video</h2>
+
+      <div class="drop-zone" id="drop-zone">
+        <div class="icon">📹</div>
+        <div><strong>Click to select</strong> or drag & drop a video file</div>
+        <p id="file-name">MP4, AVI, MOV, MKV, WEBM — up to 500 MB</p>
+      </div>
+
+      <input type="file" id="file-input" accept="video/*" hidden />
+
+      <div class="options">
+        <label>Line Position
+          <input type="number" id="opt-line" value="0.5" step="0.05" min="0.1" max="0.9" />
+        </label>
+        <label>Min Area (px²)
+          <input type="number" id="opt-area" value="1500" step="100" min="100" />
+        </label>
+      </div>
+
+      <button class="btn" id="upload-btn" disabled>
+        ⬆ Upload & Process
+      </button>
+
+      <div class="progress-container" id="progress-container">
+        <div class="progress-bar-bg">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <div class="progress-text" id="progress-text">Starting…</div>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div class="result-section" id="result-section">
+      <h2>Latest Result</h2>
+      <div class="result-count" id="result-count">0 <span>items detected</span></div>
+      <video id="result-video" controls></video>
+    </div>
+
+    <!-- Job history -->
+    <div class="job-list" id="job-list">
+      <h3>Job History</h3>
+    </div>
+
+  </div>
+
+  <script>
+    const socket = io();
+    const dropZone = document.getElementById("drop-zone");
+    const fileInput = document.getElementById("file-input");
+    const uploadBtn = document.getElementById("upload-btn");
+    const progressContainer = document.getElementById("progress-container");
+    const progressBar = document.getElementById("progress-bar");
+    const progressText = document.getElementById("progress-text");
+    const resultSection = document.getElementById("result-section");
+    const resultCount = document.getElementById("result-count");
+    const resultVideo = document.getElementById("result-video");
+    const fileName = document.getElementById("file-name");
+
+    let selectedFile = null;
+
+    // ----------- File selection -----------
+    dropZone.addEventListener("click", () => fileInput.click());
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      if (e.dataTransfer.files.length) {
+        selectedFile = e.dataTransfer.files[0];
+        fileName.textContent = selectedFile.name;
+        uploadBtn.disabled = false;
+      }
+    });
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length) {
+        selectedFile = fileInput.files[0];
+        fileName.textContent = selectedFile.name;
+        uploadBtn.disabled = false;
+      }
+    });
+
+    // ----------- Upload -----------
+    uploadBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+
+      uploadBtn.disabled = true;
+      progressContainer.classList.add("active");
+      progressBar.style.width = "0%";
+      progressText.textContent = "Uploading…";
+
+      const form = new FormData();
+      form.append("video", selectedFile);
+      form.append("linePosition", document.getElementById("opt-line").value);
+      form.append("minArea", document.getElementById("opt-area").value);
+
+      try {
+        const res = await fetch("/api/upload", { method: "POST", body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Upload failed");
+        progressText.textContent = `Job ${data.jobId} — processing…`;
+        document.getElementById("current-count").textContent = "0";
+      } catch (err) {
+        progressText.textContent = `Error: ${err.message}`;
+        uploadBtn.disabled = false;
+      }
+    });
+
+    // ----------- Socket events -----------
+    socket.on("progress", (data) => {
+      progressBar.style.width = `${data.progress}%`;
+      progressText.textContent = `Processing… ${data.progress}% — ${data.count} items so far`;
+      document.getElementById("current-count").textContent = data.count;
+    });
+
+    socket.on("done", (data) => {
+      progressBar.style.width = "100%";
+      progressText.textContent = "Done!";
+      resultSection.classList.add("active");
+      resultCount.innerHTML = `${data.count} <span>items detected</span>`;
+      resultVideo.src = data.outputUrl;
+      document.getElementById("current-count").textContent = data.count;
+
+      // Refresh global stats
+      fetchStats();
+      fetchJobs();
+
+      // Reset upload
+      selectedFile = null;
+      uploadBtn.disabled = true;
+      fileName.textContent = "MP4, AVI, MOV, MKV, WEBM — up to 500 MB";
+      setTimeout(() => progressContainer.classList.remove("active"), 3000);
+    });
+
+    socket.on("error", (data) => {
+      progressText.textContent = `Error: ${data.error}`;
+      uploadBtn.disabled = false;
+    });
+
+    // ----------- Stats polling -----------
+    async function fetchStats() {
+      try {
+        const res = await fetch("/api/count");
+        const data = await res.json();
+        document.getElementById("total-count").textContent = data.totalCount;
+        document.getElementById("total-jobs").textContent = data.jobs;
+      } catch { /* ignore */ }
+    }
+
+    async function fetchJobs() {
+      try {
+        const res = await fetch("/api/jobs");
+        const jobs = await res.json();
+        const container = document.getElementById("job-list");
+        const html = jobs.map((j) => `
+          <div class="job-item">
+            <span>${j.id.substring(0, 16)}…</span>
+            <span>${j.count} items</span>
+            <span class="status-badge ${j.status}">${j.status}</span>
+          </div>
+        `).join("");
+        container.innerHTML = `<h3>Job History</h3>${html || "<p style='color:var(--muted);font-size:.85rem'>No jobs yet.</p>"}`;
+      } catch { /* ignore */ }
+    }
+
+    // Initial load
+    fetchStats();
+    fetchJobs();
+  </script>
+</body>
+</html>

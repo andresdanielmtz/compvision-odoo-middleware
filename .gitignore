@@ -1,0 +1,7 @@
+node_modules/
+.venv/
+uploads/
+*.mp4
+*.avi
+*.mov
+*.mkv
